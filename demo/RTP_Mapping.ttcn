@@ -1,0 +1,120 @@
+/******************************************************************************
+* Copyright (c) 2005, 2014  Ericsson AB
+* All rights reserved. This program and the accompanying materials
+* are made available under the terms of the Eclipse Public License v1.0
+* which accompanies this distribution, and is available at
+* http://www.eclipse.org/legal/epl-v10.html
+*
+* Contributors:
+*   Gabor Szalai - initial implementation and initial documentation
+*   Peter Kremer
+*   Sandor Palugyai
+*   Tibor Harai
+******************************************************************************/
+module RTP_Mapping{
+  import from UDPasp_Types all;
+  import from UDPasp_PortType all;
+  import from RTP_Types all;
+
+  template ASP_RTP_message tr_ASP_RTP_mapping_message:=?;
+  template ASP_RTP_Open_session tr_ASP_RTP_mapping_open:=?;
+  template ASP_RTP_Close_session tr_ASP_RTP_mapping_close:=?;
+  template ASP_UDP_message tr_ASP_UDP_mapping_message:=?;
+  template ASP_UDP_open_result tr_ASP_UDP_mapping_open_result:=?;
+
+  type component RTP_mapping_CT{
+    port UDPasp_PT UDP_PCO;
+    port RTPasp_SP_PT RTP_SP_PCO;
+  };
+  
+  function f_RTP_EncDec_Mapping() runs on RTP_mapping_CT{
+
+    var ASP_RTP_message v_RTP_message;
+    var ASP_RTP_Open_session v_RTP_open; 
+    var ASP_RTP_Close_session v_RTP_close;
+    var ASP_RTP_Open_session_result v_RTP_open_result;
+
+    var ASP_UDP_message v_UDP_message;
+    var ASP_UDP_open v_UDP_open;
+    var ASP_UDP_close v_UDP_close;
+    var ASP_UDP_open_result v_UDP_open_r;
+    
+    alt{
+      /***** Messges from RTP port *****/
+      [] RTP_SP_PCO.receive(tr_ASP_RTP_mapping_message) -> value v_RTP_message{
+        v_UDP_message.data:=f_RTP_enc(v_RTP_message.data);
+        if(ispresent(v_RTP_message.session_id.id)){
+          v_UDP_message.id:=v_RTP_message.session_id.id;
+        }
+        else {v_UDP_message.id:=omit;}
+
+        if(ispresent(v_RTP_message.session_id.dest_address)){
+          v_UDP_message.remote_addr:=v_RTP_message.session_id.dest_address;
+        }
+        else {v_UDP_message.remote_addr:=omit;}
+
+        if(ispresent(v_RTP_message.session_id.dest_port)){
+          v_UDP_message.remote_port:=v_RTP_message.session_id.dest_port;
+        }
+        else {v_UDP_message.remote_port:=omit;}
+        
+        UDP_PCO.send(v_UDP_message);
+        repeat;
+      }
+
+      [] RTP_SP_PCO.receive(tr_ASP_RTP_mapping_open) -> value v_RTP_open{
+        if(ispresent(v_RTP_open.session_id.dest_address)){
+          v_UDP_open.remote_addr:=v_RTP_open.session_id.dest_address;
+        }
+        else {v_UDP_open.remote_addr:=omit;}
+
+        if(ispresent(v_RTP_open.session_id.dest_port)){
+          v_UDP_open.remote_port:=v_RTP_open.session_id.dest_port;
+        }
+        else {v_UDP_open.remote_port:=omit;}
+
+        if(ispresent(v_RTP_open.session_id.local_address)){
+          v_UDP_open.local_addr:=v_RTP_open.session_id.local_address;
+        }
+        else {v_UDP_open.local_addr:=omit;}
+
+        if(ispresent(v_RTP_open.session_id.local_port)){
+          v_UDP_open.local_port:=v_RTP_open.session_id.local_port;
+        }
+        else {v_UDP_open.local_port:=omit;}
+
+        UDP_PCO.send(v_UDP_open);
+        repeat;
+      }
+      
+      [] RTP_SP_PCO.receive(tr_ASP_RTP_mapping_close) -> value v_RTP_close{
+        v_UDP_close.id:=v_RTP_close.session_id.id;
+        UDP_PCO.send(v_UDP_close);
+        repeat;
+      }
+      
+      /***** Messges from UDP port *****/
+      [] UDP_PCO.receive(tr_ASP_UDP_mapping_message) -> value v_UDP_message{
+        v_RTP_message.data:=f_RTP_dec(v_UDP_message.data);
+        v_RTP_message.session_id.local_address:=omit;
+        v_RTP_message.session_id.local_port:=omit;
+        v_RTP_message.session_id.id:=v_UDP_message.id;
+        v_RTP_message.session_id.dest_address:=v_UDP_message.remote_addr;
+        v_RTP_message.session_id.dest_port:=v_UDP_message.remote_port;
+        RTP_SP_PCO.send(v_RTP_message);
+        repeat;
+      }
+
+
+      [] UDP_PCO.receive(tr_ASP_UDP_mapping_open_result) -> value v_UDP_open_r{
+        v_RTP_open_result.session_id.local_address:=v_UDP_open_r.local_addr;
+        v_RTP_open_result.session_id.local_port:=v_UDP_open_r.local_port;
+        v_RTP_open_result.session_id.id:=v_UDP_open_r.id;
+        v_RTP_open_result.session_id.dest_address:=omit;
+        v_RTP_open_result.session_id.dest_port:=omit;
+        RTP_SP_PCO.send(v_RTP_open_result);
+        repeat;
+      }
+    }
+  }
+}

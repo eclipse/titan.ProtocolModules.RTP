@@ -1,0 +1,307 @@
+/******************************************************************************
+* Copyright (c) 2005, 2014  Ericsson AB
+* All rights reserved. This program and the accompanying materials
+* are made available under the terms of the Eclipse Public License v1.0
+* which accompanies this distribution, and is available at
+* http://www.eclipse.org/legal/epl-v10.html
+*
+* Contributors:
+*   Gabor Szalai - initial implementation and initial documentation
+*   Peter Kremer
+*   Sandor Palugyai
+*   Tibor Harai
+******************************************************************************/
+//
+//  File:               RTP_Types.ttcn
+//  Description:        RTP
+//  Rev:                R4B
+//  Prodnr:             CNL 113 392
+//
+module RTP_Types{
+
+import from General_Types all;
+
+external function f_RTP_enc ( in RTP_messages_union pdu ) return octetstring;
+external function f_RTP_dec ( in octetstring data ) return RTP_messages_union;
+external function f_RTP_packet_enc ( in RTP_packet pdu ) return octetstring;
+external function f_RTP_packet_dec ( in octetstring data ) return RTP_packet;
+
+type set of BIT32_BO_LAST RTP_CSRC_list;
+
+type record RTP_field_ext_header{
+  BIT16_BO_LAST      ext_header_id,
+  LIN2_BO_LAST      ext_header_length,
+  octetstring   ext_header_data optional
+} with {
+  variant (ext_header_length) "LENGTHTO(ext_header_data), UNIT(dword32)";
+};
+
+type record RTP_header {
+  INT2b                version,
+  BIT1                 padding_ind,
+  BIT1                 extension_ind,
+  INT4b                CSRC_count,
+  BIT1                 marker_bit,
+  INT7b                payload_type,
+  LIN2_BO_LAST         sequence_number,
+  BIT32_BO_LAST        time_stamp,
+  BIT32_BO_LAST        SSRC_id,
+  RTP_CSRC_list        CSRCs optional,
+  RTP_field_ext_header ext_header optional
+} with {
+  variant (ext_header) "PRESENCE(extension_ind = '1'B)";
+  variant (CSRC_count) "LENGTHTO(CSRCs), UNIT(elements)";
+  variant "FIELDORDER(msb)"
+}
+
+type record RTP_packet {
+  RTP_header header,
+  octetstring payload
+} with { variant "" }
+
+type record PDU_RTP{
+  INT2b                  version,
+  BIT1                  padding_ind,
+  BIT1                  extension_ind,
+  INT4b                  CSRC_count,
+  BIT1                  marker_bit,
+  INT7b                  payload_type,
+  LIN2_BO_LAST              sequence_number,
+  BIT32_BO_LAST              time_stamp,
+  BIT32_BO_LAST              SSRC_id,
+  RTP_CSRC_list         CSRCs optional,
+  RTP_field_ext_header  ext_header optional,
+  octetstring data
+} with {
+  variant (ext_header) "PRESENCE(extension_ind = '1'B)";
+  variant (CSRC_count) "LENGTHTO(CSRCs), UNIT(elements)";
+  variant "FIELDORDER(msb)"
+};
+
+
+type record RTCP_field_sender_info{
+  BIT32_BO_LAST              NTP_timestamp_MSW,
+  BIT32_BO_LAST              NTP_timestamp_LSW,
+  BIT32_BO_LAST              RTP_timestamp,
+  BIT32_BO_LAST              senders_packet_count,
+  BIT32_BO_LAST              senders_octet_count
+};
+
+type record RTCP_report{
+  BIT32_BO_LAST              SSRC_id,
+  LIN1                  farction_lost,
+  LIN3_BO_LAST              number_lost_packet,
+  BIT32_BO_LAST              highest_seq_num,
+  BIT32_BO_LAST              jitter,
+  BIT32_BO_LAST              last_SR_time_stamp,
+  BIT32_BO_LAST              delay_since_SR
+};
+
+type set of RTCP_report RTCP_report_list;
+
+type record RTCP_IE_SR{
+  INT2b                  version,
+  BIT1                  padding_ind,
+  INT5b                  RR_count,
+  LIN1                  payload_type,
+  LIN2_BO_LAST              packet_length,
+  BIT32_BO_LAST              SSRC_id,
+  RTCP_field_sender_info sender_info,
+  RTCP_report_list      report_list optional,
+  octetstring           padding optional
+} with {
+  variant (padding) "PRESENCE(padding_ind = '1'B)";
+  variant (RR_count) "LENGTHTO(report_list), UNIT(elements)";
+  variant (packet_length) "LENGTHTO(SSRC_id,sender_info,report_list,padding)";
+  variant (packet_length) "UNIT(dword32)";
+  variant "FIELDORDER(msb)"
+};
+
+type record RTCP_IE_RR{
+  INT2b                  version,
+  BIT1                  padding_ind,
+  INT5b                  RR_count,
+  LIN1                  payload_type,
+  LIN2_BO_LAST              packet_length,
+  BIT32_BO_LAST              SSRC_id,
+  RTCP_report_list      report_list optional,
+  octetstring           padding optional
+} with {
+  variant (padding) "PRESENCE(padding_ind = '1'B)";
+  variant (RR_count) "LENGTHTO(report_list), UNIT(elements)";
+  variant (packet_length) "LENGTHTO(SSRC_id,report_list,padding)";
+  variant (packet_length) "UNIT(dword32)";
+  variant "FIELDORDER(msb)"
+};
+
+type record RTCP_field_SDES{
+  LIN1                  id,
+  LIN1                  content_length,
+  charstring            content
+} with {
+  variant (content_length) "LENGTHTO(content)"
+};
+
+type record RTCP_field_PRIV{
+  LIN1                  id,
+  LIN1                  content_length,
+  LIN1                  prefix_length,
+  charstring            prefix,
+  charstring            content
+} with {
+  variant (content_length) "LENGTHTO(prefix_length,prefix,content)";
+  variant (prefix_length) "LENGTHTO(prefix)"
+};
+
+type union RTCP_SDES_item{
+  RTCP_field_SDES       cname,
+  RTCP_field_SDES       name,
+  RTCP_field_SDES       email,
+  RTCP_field_SDES       phone,
+  RTCP_field_SDES       loc,
+  RTCP_field_SDES       tool,
+  RTCP_field_SDES       note,
+  RTCP_field_PRIV       priv
+} with {
+  variant "TAG(cname, id=1;
+                 name,  id=2;
+                 email, id=3;
+                 phone, id=4;
+                 loc,   id=5;
+                 tool,  id=6;
+                 note,  id=7;
+                 priv,  id=8)"
+};
+
+type set of RTCP_SDES_item RTCP_SDES_item_list;
+
+type record RTCP_SDES_chunk{
+  BIT32_BO_LAST              SSRC_CSRC_id,
+  RTCP_SDES_item_list   SDES_items optional,
+  BIT8                  end_of_list // always set to zero
+} with {
+  variant "PADDING(dword32)"
+};
+
+type set of RTCP_SDES_chunk RTCP_SDES_chunk_list;
+
+type record RTCP_IE_SDES{
+  INT2b                  version,
+  BIT1                  padding_ind,
+  INT5b                  source_count,
+  LIN1                  payload_type,
+  LIN2_BO_LAST              packet_length,
+  RTCP_SDES_chunk_list  chunks optional,
+  octetstring           padding optional
+} with {
+  variant (padding) "PRESENCE(padding_ind = '1'B)";
+  variant (source_count) "LENGTHTO(chunks), UNIT(elements)";
+  variant (packet_length) "LENGTHTO(chunks,padding)";
+  variant (packet_length) "UNIT(dword32)";
+  variant "FIELDORDER(msb)"
+};
+
+type record RTCP_field_reason{
+  LIN1                  reason_length,
+  charstring            reason
+} with {
+  variant (reason_length) "LENGTHTO(reason)";
+  variant "PADDING(dword32)"
+};
+
+type record RTCP_IE_BYE{
+  INT2b                  version,
+  BIT1                  padding_ind,
+  INT5b                  source_count,
+  LIN1                  payload_type,
+  LIN2_BO_LAST              packet_length,
+  RTP_CSRC_list         SSRC_CSRC_ids optional,
+  RTCP_field_reason     reason optional,
+  octetstring           padding optional
+} with {
+  variant (padding) "PRESENCE(padding_ind = '1'B)";
+  variant (source_count) "LENGTHTO(SSRC_CSRC_ids), UNIT(elements)";
+  variant (packet_length) "LENGTHTO(SSRC_CSRC_ids,reason,padding)";
+  variant (packet_length) "UNIT(dword32)";
+  variant "FIELDORDER(msb)"
+};
+
+type record RTCP_IE_APP{
+  INT2b                  version,
+  BIT1                  padding_ind,
+  INT5b                  sub_type,
+  LIN1                  payload_type,
+  LIN2_BO_LAST              packet_length,
+  BIT32_BO_LAST              SSRC_CSRC_id,
+  CHAR4                 name,
+  octetstring           appdata optional,
+  octetstring           padding optional
+} with {
+  variant (padding) "PRESENCE(padding_ind = '1'B)";
+  variant (packet_length) "LENGTHTO(SSRC_CSRC_id,name,appdata,padding)";
+  variant (packet_length) "UNIT(dword32)";
+  variant "FIELDORDER(msb)"
+};
+
+type union RTCP_message{
+  RTCP_IE_SR            sr,
+  RTCP_IE_RR            rr,
+  RTCP_IE_SDES          sdes,
+  RTCP_IE_BYE           bye,
+  RTCP_IE_APP           app
+} with {
+  variant "TAG(sr,    payload_type=200;
+                 rr,    payload_type=201;
+                 sdes,  payload_type=202;
+                 bye,   payload_type=203;
+                 app,   payload_type=204)"
+};
+
+type record of RTCP_message PDU_RTCP with {variant ""};
+
+type record RTP_session_par{
+  integer               id optional,
+  charstring            local_address optional,
+  integer               local_port optional,
+  charstring            dest_address optional,
+  integer               dest_port optional
+}
+
+type record ASP_RTP_Open_session{
+  RTP_session_par       session_id
+}
+
+type record ASP_RTP_Open_session_result{
+  RTP_session_par       session_id
+}
+
+type record ASP_RTP_Close_session{
+  RTP_session_par       session_id
+}
+
+type union RTP_messages_union{
+  PDU_RTCP              rtcp,
+  PDU_RTP               rtp
+}
+
+type record ASP_RTP_message{
+  RTP_session_par      session_id,
+  RTP_messages_union   data
+}
+
+type port RTPasp_PT message{
+  inout ASP_RTP_message;
+  out ASP_RTP_Open_session;
+  out ASP_RTP_Close_session;
+  in ASP_RTP_Open_session_result
+}  with {extension "internal"}
+
+type port RTPasp_SP_PT message{
+  inout ASP_RTP_message;
+  in ASP_RTP_Open_session;
+  in ASP_RTP_Close_session;
+  out ASP_RTP_Open_session_result
+}  with {extension "internal"}
+
+} with { encode "RAW"}
+

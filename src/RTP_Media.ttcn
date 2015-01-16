@@ -1,0 +1,170 @@
+/******************************************************************************
+* Copyright (c) 2005, 2014  Ericsson AB
+* All rights reserved. This program and the accompanying materials
+* are made available under the terms of the Eclipse Public License v1.0
+* which accompanies this distribution, and is available at
+* http://www.eclipse.org/legal/epl-v10.html
+*
+* Contributors:
+*   Gabor Szalai - initial implementation and initial documentation
+*   Peter Kremer
+*   Sandor Palugyai
+*   Tibor Harai
+******************************************************************************/
+//
+//  File:           RTP_Media.ttcn
+//  Description:    Functions of the media file operations for RTP.
+//  Rev:            R4A
+//  Prodnr:         CNL 113 392
+
+module RTP_Media
+{
+import from RTP_File_Types all;
+
+function f_Init_Media_Fileinfo( in charstring pl_filename,
+                                in integer pl_block_size,
+                                in InitOperType pl_init_type, 
+                                in RTP_MediaType pl_media_type,
+                                in integer pl_blockno,
+                                in integer pl_nof_blocks,
+                                inout RTP_FileInfo pl_fileinfo )
+{
+    pl_fileinfo.fd := f_INIT_CODEC(pl_filename, pl_block_size, pl_init_type);
+    pl_fileinfo.block_size := pl_block_size;
+    pl_fileinfo.block_no := pl_blockno;
+    pl_fileinfo.nof_blocks_to_read := pl_nof_blocks;
+    pl_fileinfo.mediaType := pl_media_type;
+    select (pl_media_type) {
+        case (JPEG) {
+            pl_fileinfo.headerOp := true;
+            // 16: size in byte of the JPEG_RTP_Header type
+            pl_fileinfo.headerOffset := 16;
+            pl_fileinfo.mediaHeader.jpeg_rtp_hdr :=
+                {{0,0,0,0,0,0},{0,'0'B,'0'B,0},{0,0,0,{0}}};
+        }
+        case (H263) {
+            pl_fileinfo.headerOp := true;
+            // size in byte of the H263_RTP_Header type
+            pl_fileinfo.headerOffset := 4;
+            pl_fileinfo.mediaHeader.h263_rtp_hdr :=
+                {'0'B,'0'B,'000'B,'000'B,
+                 '000'B,'0'B,'0'B,'0'B,'0'B,
+                 '0000'B,'00'B,'000'B,
+                 '00000000'B};
+        }
+        case (MPEG4, GIF, f3GP, fMPEG4) {
+            pl_fileinfo.headerOp := false;
+            pl_fileinfo.headerOffset := 0;
+            pl_fileinfo.mediaHeader.file_rtp_hdr := ''O;
+        }
+        case else {
+            log("ERROR: Wrong media type setting!");
+            setverdict(fail);
+            stop;
+        }
+    }
+}
+
+function f_Get_Media_Content( inout RTP_FileInfo pl_fileinfo ) return octetstring
+{
+    var octetstring retval;
+    select (pl_fileinfo.mediaType) {
+        case (JPEG) {
+            if (pl_fileinfo.headerOp) {
+                f_Count_JPEG_Header_Offset(pl_fileinfo);
+                var octetstring vl_block :=
+                    f_GET_CONTENT(pl_fileinfo.fd, 0, 0, pl_fileinfo.headerOffset);
+                pl_fileinfo.mediaHeader.jpeg_rtp_hdr := f_JPEG_RTP_Hdr_dec( vl_block );
+                pl_fileinfo.mediaHeader.jpeg_rtp_hdr.main.fragment_offset :=
+                    pl_fileinfo.headerOffset;
+                pl_fileinfo.headerOp := false;
+            }
+            var JPEG_RTP vl_RTP_data;
+            vl_RTP_data.data := f_GET_CONTENT(pl_fileinfo.fd, pl_fileinfo.block_no,
+                                           pl_fileinfo.nof_blocks_to_read,
+                                           pl_fileinfo.headerOffset);
+            pl_fileinfo.mediaHeader.jpeg_rtp_hdr.main.fragment_offset :=
+                pl_fileinfo.mediaHeader.jpeg_rtp_hdr.main.fragment_offset + 
+                lengthof(vl_RTP_data.data);
+            vl_RTP_data.jpeg_rtp_hdr := pl_fileinfo.mediaHeader.jpeg_rtp_hdr;
+            var Media_RTP_Data vl_Data := { jpeg_rtp := vl_RTP_data };
+            retval := f_RTP_Data_enc(vl_Data);
+        }
+        case (H263) {
+            if (pl_fileinfo.headerOp) {
+                var octetstring vl_hdr:=f_GET_CONTENT(pl_fileinfo.fd,0,0,pl_fileinfo.headerOffset);
+                pl_fileinfo.mediaHeader.h263_rtp_hdr := f_H263_RTP_Hdr_dec( vl_hdr );
+                pl_fileinfo.headerOp := false;
+            }
+            var H263_RTP vl_RTP_data;
+            vl_RTP_data.data := f_GET_CONTENT(pl_fileinfo.fd,
+                                           pl_fileinfo.block_no,
+                                           pl_fileinfo.nof_blocks_to_read,
+                                           pl_fileinfo.headerOffset);
+            vl_RTP_data.h263_rtp_hdr := pl_fileinfo.mediaHeader.h263_rtp_hdr;
+            var Media_RTP_Data vl_Data := { h263_rtp := vl_RTP_data };
+            retval := f_RTP_Data_enc(vl_Data);
+        }
+        case (MPEG4, GIF, f3GP, fMPEG4) {
+            retval := f_GET_CONTENT(pl_fileinfo.fd,
+                                    pl_fileinfo.block_no,
+                                    pl_fileinfo.nof_blocks_to_read,
+                                    pl_fileinfo.headerOffset);
+        }
+        case else {
+            log("ERROR: Wrong media type setting!");
+            setverdict(fail);
+            stop;
+        }
+    }
+    return retval;
+}
+
+
+function f_Put_Media_Content(in RTP_FileInfo pl_fileinfo,
+                             in octetstring data) return integer
+{
+    select (pl_fileinfo.mediaType) {
+        case (JPEG) {
+            var JPEG_RTP vl_RTP_data := f_JPEG_RTP_Data_dec(data);
+            if (pl_fileinfo.headerOp) {
+                var Media_RTP_Header vl_mrh :=
+                    {jpeg_rtp_hdr := vl_RTP_data.jpeg_rtp_hdr};
+                // the fragment offset let be always zero in the file
+                vl_mrh.jpeg_rtp_hdr.main.fragment_offset := 0;
+                pl_fileinfo.headerOffset := f_PUT_CONTENT(pl_fileinfo.fd,0,f_RTP_Hdr_enc(vl_mrh),0);
+                pl_fileinfo.headerOp := false;
+            }
+            if (f_PUT_CONTENT(pl_fileinfo.fd,pl_fileinfo.block_no,vl_RTP_data.data,pl_fileinfo.headerOffset)
+                < pl_fileinfo.nof_blocks_to_read*pl_fileinfo.block_size) {
+                return 0;
+            }
+        }
+        case (H263) {
+            var H263_RTP vl_RTP_data := f_H263_RTP_Data_dec(data);
+            if (pl_fileinfo.headerOp) {
+                var Media_RTP_Header vl_mrh :=
+                    {h263_rtp_hdr := vl_RTP_data.h263_rtp_hdr};
+                pl_fileinfo.headerOffset := f_PUT_CONTENT(pl_fileinfo.fd,0,f_RTP_Hdr_enc(vl_mrh),0);
+                pl_fileinfo.headerOp := false;
+            }
+            if (f_PUT_CONTENT(pl_fileinfo.fd,pl_fileinfo.block_no,vl_RTP_data.data,pl_fileinfo.headerOffset)
+                < pl_fileinfo.nof_blocks_to_read*pl_fileinfo.block_size) {
+                return 0;
+            }
+        }
+        case (MPEG4, GIF, f3GP, fMPEG4) {
+            if (f_PUT_CONTENT(pl_fileinfo.fd, pl_fileinfo.block_no, data, pl_fileinfo.headerOffset) <
+                pl_fileinfo.nof_blocks_to_read*pl_fileinfo.block_size) {
+                return 0;
+            }
+        }
+        case else {
+            log("ERROR: Wrong media type setting!");
+            setverdict(fail);
+            stop;
+        }
+    }
+    return 1;
+}
+}

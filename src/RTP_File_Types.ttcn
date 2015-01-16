@@ -1,0 +1,172 @@
+/******************************************************************************
+* Copyright (c) 2005, 2014  Ericsson AB
+* All rights reserved. This program and the accompanying materials
+* are made available under the terms of the Eclipse Public License v1.0
+* which accompanies this distribution, and is available at
+* http://www.eclipse.org/legal/epl-v10.html
+*
+* Contributors:
+*   Gabor Szalai - initial implementation and initial documentation
+*   Peter Kremer
+*   Sandor Palugyai
+*   Tibor Harai
+******************************************************************************/
+//
+//  File:               RTP_File_Types.ttcn
+//  Description:        Types for the media file operation
+//  Rev:                R4B
+//  Prodnr:             CNL 113 392
+//
+
+module RTP_File_Types
+{
+//import from RTP_Types all;
+import from General_Types all;
+
+external function f_INIT_CODEC(
+  in charstring pl_filename,
+  in integer pl_block_size,
+  in InitOperType pl_init_type)
+return integer;
+
+external function f_GET_CONTENT(
+  in integer pl_fd,
+  in integer pl_blockno,
+  in integer pl_nof_blocks_to_read,
+  in integer pl_header_offset)
+return octetstring;
+
+external function f_PUT_CONTENT(
+  in integer pl_fd,
+  in integer pl_blockno,
+  in octetstring pl_stream,
+  in integer pl_header_offset)
+return integer;
+
+external function f_CLOSE_CODEC(in integer pl_fd);
+
+external function f_Count_JPEG_Header_Offset(inout RTP_FileInfo pl_fileinfo);
+
+external function f_RTP_Hdr_enc(in Media_RTP_Header pl_hdr) return octetstring;
+
+external function f_JPEG_RTP_Hdr_dec(in octetstring pl_stream)
+return JPEG_RTP_Header;
+
+external function f_H263_RTP_Hdr_dec(in octetstring pl_stream)
+return H263_RTP_Header;
+
+external function f_RTP_Data_enc(in Media_RTP_Data pl_rtp_data)
+return octetstring;
+
+external function f_JPEG_RTP_Data_dec(in octetstring pl_stream)
+return JPEG_RTP;
+
+external function f_H263_RTP_Data_dec(in octetstring pl_stream)
+return H263_RTP;
+
+//*************************** Media type *****************************
+type enumerated RTP_MediaType {
+  JPEG,      // for JPEG video codec
+  H263,      // for H.263 video codec
+  MPEG4,     // for MPEG4 video codec
+  GIF,       // for GIF image codec
+  f3GP,      // for 3gp file format
+  fMPEG4,    // for MPEG4 file format
+  UNKNOWN
+}
+//********************************************************************
+
+type enumerated InitOperType { OPEN, CREATE }
+
+type record RTP_FileInfo {
+  integer           fd,                    // file description
+  integer           block_size,            // size of block
+  integer           block_no,              // starting block position
+  integer           nof_blocks_to_read,    // number of blocks to read
+  RTP_MediaType     mediaType,             // type of media
+  boolean           headerOp,              // true: get or put header
+  integer           headerOffset,          // size of media header
+  Media_RTP_Header  mediaHeader            // header of the media
+}
+
+type integer INT14_BE with {variant "FIELDLENGTH(14)"; 
+  variant "COMP(nosign)";
+  variant "BYTEORDER(last)"};
+
+//*************************** JPEG ********************************************
+// according to RFC2435
+type record JPEG_header_Main {
+  LIN1      type_specific,       // type-specific field
+  LIN3_BO_LAST  fragment_offset,     // fragment byte offset
+  LIN1      typeField,           // id of jpeg decoder params
+  LIN1      q,                   // quantization factor (or table id)
+  LIN1      width,               // frame width in 8 pixel blocks
+  LIN1      heigth               // frame heigth in 8 pixel blocks
+}
+
+type record JPEG_header_Restart_Marker {   // Restart Marker header
+  LIN2_BO_LAST  dri,                 // number of MCUs (Minimum Coded Units)
+                                 // between restart markers (or 0 if there
+                                 // are no restart markers in the data)
+  BIT1      first,
+  BIT1      last,
+  INT14_BE  restart_count
+}
+
+type record of integer Q_Table;
+
+type record JPEG_header_Q_Table {// Quantization Table header
+  LIN1      mbz,                // Must Be Zero (MBZ)
+  LIN1      precision,          // size of the coefficients in the q-table
+  LIN2_BO_LAST  lengthField,        // length of the q-table data
+  Q_Table   qtable              // quantization table
+} with { variant (lengthField) "LENGTHTO(qtable)" }
+
+type record JPEG_RTP_Header {
+  JPEG_header_Main            main,
+  JPEG_header_Restart_Marker  rst,
+  JPEG_header_Q_Table         qtable
+} with { variant "FIELDORDER(msb)" };
+
+type record JPEG_RTP {
+  JPEG_RTP_Header  jpeg_rtp_hdr,
+  octetstring      data
+} with { variant "FIELDORDER(msb)" };
+
+//*************************** H.263 *******************************************
+// according to RFC2190 (payload header: mode A)
+type record H263_RTP_Header {
+  BIT1  f,    // flag bit: indicates the mode of the payload header
+  BIT1  p,    // optional PB-frames mode as defined by the H.263
+  BIT3  sbit, // start bit position
+  BIT3  ebit, // end bit position
+  BIT3  src,  // source format, specifies the resolution of the current picture
+  BIT1  i,    // picture coding type
+  BIT1  u,    // set to 1 if the Unrestricted Motion Vector option
+  BIT1  s,    // set to 1 if the Syntax-based Arithmetic Coding option
+  BIT1  a,    // set to 1 if the Advanced Prediction option
+  BIT4  r,    // reserved, must be set to zero
+  BIT2  dbq,  // differential quantization parameter
+  BIT3  trb,  // Temporal Reference for the B frame
+  BIT8  tr    // Temporal Reference for the P frame
+}
+
+type record H263_RTP {
+  H263_RTP_Header h263_rtp_hdr,
+  octetstring data
+} with { variant "FIELDORDER(msb)" };
+
+//*************************** Other *******************************************
+type octetstring FILE_RTP_Header;
+
+type union Media_RTP_Header {
+  JPEG_RTP_Header       jpeg_rtp_hdr,
+  H263_RTP_Header       h263_rtp_hdr,
+  FILE_RTP_Header       file_rtp_hdr
+} with { variant "FIELDORDER(msb)" };
+
+type union Media_RTP_Data {
+  JPEG_RTP  jpeg_rtp,
+  H263_RTP  h263_rtp
+} with { variant "FIELDORDER(msb)" };
+}with{ encode "RAW"}

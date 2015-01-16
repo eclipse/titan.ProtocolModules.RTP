@@ -1,0 +1,35 @@
+<!--
+/******************************************************************************
+* Copyright (c) 2005, 2014  Ericsson AB
+* All rights reserved. This program and the accompanying materials
+* are made available under the terms of the Eclipse Public License v1.0
+* which accompanies this distribution, and is available at
+* http://www.eclipse.org/legal/epl-v10.html
+*
+* Contributors:
+*   Gabor Szalai - initial implementation and initial documentation
+*   Peter Kremer
+*   Sandor Palugyai
+*   Tibor Harai
+******************************************************************************/
+//
+//  File:               RTP_CNL113392.grp
+//  Description:        RTP group file 
+//  Rev:                R4A
+//  Prodnr:             CNL 113 392
+//  Reference:          
+//
+//
+-->
+<!DOCTYPE TITAN_GUI_FileGroup_file>
+<FileGroup TITAN_version="3.1.pl0" >
+    <File_Group name="RTP_CNL113392" >
+        <File path="RTP_EncDec.cc" />
+        <File path="RTP_File.cc" />
+        <File path="RTP_File_Types.ttcn" />
+        <File path="RTP_Media.ttcn" />
+        <File path="RTP_Media_EncDec.cc" />
+        <File path="RTP_Types.ttcn" />
+    </File_Group>
+</FileGroup>
+

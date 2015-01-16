@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ Copyright (c) 2014 Ericsson
+
+  All rights reserved. This program and the accompanying materials
+  are made available under the terms of the Eclipse Public License v1.0
+  which accompanies this distribution, and is available at
+  http://www.eclipse.org/legal/epl-v10.html
+
+
+   File:               RTP_CNL113392.tpd
+   Description:        tpd project file
+   Rev:                R4A
+   Prodnr:             CNL 113 392
+
+ -->
+<TITAN_Project_File_Information version="1.0">
+  <ProjectName>RTP_CNL113392</ProjectName>
+  <ReferencedProjects>
+    <ReferencedProject name="ProtocolModules_Common" projectLocationURI="../COMMON/ProtocolModules_Common.tpd"/>
+  </ReferencedProjects>
+  <Folders>
+    <FolderResource projectRelativePath="src" relativeURI="src"/>
+  </Folders>
+  <Files>
+    <FileResource projectRelativePath="src/RTP_CNL113392.grp" relativeURI="src/RTP_CNL113392.grp"/>
+    <FileResource projectRelativePath="src/RTP_EncDec.cc" relativeURI="src/RTP_EncDec.cc"/>
+    <FileResource projectRelativePath="src/RTP_File.cc" relativeURI="src/RTP_File.cc"/>
+    <FileResource projectRelativePath="src/RTP_File_Types.ttcn" relativeURI="src/RTP_File_Types.ttcn"/>
+    <FileResource projectRelativePath="src/RTP_Media.ttcn" relativeURI="src/RTP_Media.ttcn"/>
+    <FileResource projectRelativePath="src/RTP_Media_EncDec.cc" relativeURI="src/RTP_Media_EncDec.cc"/>
+    <FileResource projectRelativePath="src/RTP_Types.ttcn" relativeURI="src/RTP_Types.ttcn"/>
+  </Files>
+  <ActiveConfiguration>Default</ActiveConfiguration>
+  <Configurations>
+    <Configuration name="Default">
+      <ProjectProperties>
+        <MakefileSettings>
+          <generateInternalMakefile>true</generateInternalMakefile>
+          <useAbsolutePath>true</useAbsolutePath>
+          <GNUMake>true</GNUMake>
+          <incrementalDependencyRefresh>true</incrementalDependencyRefresh>
+          <targetExecutable>bin/RTP_CNL113392</targetExecutable>
+        </MakefileSettings>
+        <LocalBuildSettings>
+          <workingDirectory>bin</workingDirectory>
+        </LocalBuildSettings>
+        <NamingCoventions>
+          <enableProjectSpecificSettings>true</enableProjectSpecificSettings>
+          <externalFunction>f_.*</externalFunction>
+          <localVariable>.*</localVariable>
+          <formalParameter>.*</formalParameter>
+        </NamingCoventions>
+      </ProjectProperties>
+    </Configuration>
+  </Configurations>
+</TITAN_Project_File_Information>

@@ -1,0 +1,249 @@
+/******************************************************************************
+* Copyright (c) 2005, 2014  Ericsson AB
+* All rights reserved. This program and the accompanying materials
+* are made available under the terms of the Eclipse Public License v1.0
+* which accompanies this distribution, and is available at
+* http://www.eclipse.org/legal/epl-v10.html
+*
+* Contributors:
+*   Gabor Szalai - initial implementation and initial documentation
+*   Peter Kremer
+*   Sandor Palugyai
+*   Tibor Harai
+******************************************************************************/
+module example{
+
+    modulepar {
+        integer BLOCK_SIZE := 4;
+        integer BLOCK_NO := 0;
+        integer NOF_BLOCKS_TO_READ := 6;
+    }
+//    import from UDPasp_Types all;
+    import from UDPasp_PortType all;
+    import from RTP_Types all;
+    import from RTP_Mapping all;
+    import from RTP_File_Types all;
+    import from RTP_Media all;
+
+    template ASP_RTP_Open_session_result t_open_res:=?;
+    template ASP_RTP_message t_message:=?;
+
+    function TWAIT( in integer sec ) runs on test_comp
+    {
+        timer T_WAIT;
+        T_WAIT.start(int2float(sec));
+        T_WAIT.timeout;
+    }
+
+    type component test_comp{
+        var RTP_mapping_CT v_mapping_comp;
+        var RTP_mapping_CT v_mapping_comp2;
+
+        port RTPasp_PT RTP1;
+        port RTPasp_PT RTP2;
+    }
+
+    type component system_comp{
+        port UDPasp_PT UDP1;
+        port UDPasp_PT UDP2;
+    }
+
+    function make_pattern_file(in charstring FileName1,
+                               in charstring FileName2,
+                               in Media_RTP_Header mrh,
+                               inout ASP_RTP_message v_message)
+                               runs on test_comp
+    {
+        var ASP_RTP_message v_message1;
+    // Init codec
+        var integer v_codec1:=f_INIT_CODEC(FileName1, BLOCK_SIZE, OPEN);
+        var integer v_codec2:=f_INIT_CODEC(FileName2, BLOCK_SIZE, CREATE);
+        
+    // Send and receive message
+        var integer hdr_size := f_PUT_CONTENT(v_codec2,0,f_RTP_Hdr_enc(mrh),0)
+        var integer block_no := BLOCK_NO;
+        var boolean next := true;
+        do {
+            // read samples from file
+            v_message.data.rtp.data :=
+                f_GET_CONTENT(v_codec1, block_no, NOF_BLOCKS_TO_READ, 0);
+            if ( v_message.data.rtp.data!=''O  ) {
+                RTP1.send(v_message);
+                RTP2.receive(t_message) -> value v_message1;
+            if (f_PUT_CONTENT(v_codec2, block_no,
+                              v_message1.data.rtp.data, hdr_size) <     
+                NOF_BLOCKS_TO_READ*BLOCK_SIZE) { 
+                    next := false;
+                }
+                else {
+                    block_no := block_no + NOF_BLOCKS_TO_READ;
+                }
+            }
+            else { next := false; }
+        } while (next);
+        
+    // Close codec
+        f_CLOSE_CODEC(v_codec1);
+        f_CLOSE_CODEC(v_codec2);
+    }
+
+    function send_receive_file( in charstring FileName1,
+                                in charstring FileName2,
+                                in boolean HEADER,
+                                in RTP_MediaType mt,
+                                inout ASP_RTP_message v_message)
+                                runs on test_comp
+    {
+        var ASP_RTP_message v_message1;
+        var RTP_FileInfo FileInfo1, FileInfo2;
+        f_Init_Media_Fileinfo( FileName1, BLOCK_SIZE, OPEN,  mt, BLOCK_NO,
+                               NOF_BLOCKS_TO_READ, FileInfo1);
+        f_Init_Media_Fileinfo( FileName2, BLOCK_SIZE, CREATE, mt, BLOCK_NO,
+                               NOF_BLOCKS_TO_READ, FileInfo2);
+        var boolean next := true;
+        do {
+            v_message.data.rtp.data := f_Get_Media_Content( FileInfo1 );
+            if ( v_message.data.rtp.data!=''O  ) {
+                RTP1.send(v_message);
+                RTP2.receive(t_message) -> value v_message1;
+                // HEADER == 0 : get file without payload header (.org)
+                if ( HEADER==false ) {
+                    FileInfo2.headerOffset := 0;
+                    FileInfo2.headerOp := false;
+                }
+                if (f_Put_Media_Content(FileInfo2,v_message1.data.rtp.data)==0){
+                    next := false;
+                }
+                else {
+                FileInfo1.block_no :=
+                    FileInfo1.block_no + FileInfo1.nof_blocks_to_read;
+                FileInfo2.block_no :=
+                    FileInfo2.block_no + FileInfo2.nof_blocks_to_read;
+                }
+            }
+            else { next := false; }
+        } while (next);
+        f_CLOSE_CODEC(FileInfo1.fd);
+        f_CLOSE_CODEC(FileInfo2.fd);
+    }
+
+    testcase TC() runs on test_comp system system_comp {
+        var RTP_session_par v_session_par;
+        var ASP_RTP_Open_session v_open, v_open2;
+        var ASP_RTP_Open_session_result v_open_res, v_open_res2;
+        var ASP_RTP_message v_message;
+        var ASP_RTP_Close_session v_close;
+
+    // Create and start mapping components
+        v_mapping_comp:=RTP_mapping_CT.create;
+        map(v_mapping_comp:UDP_PCO, system:UDP1);
+        connect(self:RTP1,v_mapping_comp:RTP_SP_PCO);
+        v_mapping_comp.start(f_RTP_EncDec_Mapping());
+
+        v_mapping_comp2:=RTP_mapping_CT.create;
+        map(v_mapping_comp2:UDP_PCO, system:UDP2);
+        connect(self:RTP2,v_mapping_comp2:RTP_SP_PCO);
+        v_mapping_comp2.start(f_RTP_EncDec_Mapping());
+
+    // Open Session
+        v_session_par.id:=omit;
+        v_session_par.local_address:="localhost";
+        v_session_par.local_port:=5679;
+        v_session_par.dest_address:="localhost";
+        v_session_par.dest_port:=5060;
+        v_open.session_id:=v_session_par;
+
+        RTP1.send(v_open);
+        RTP1.receive(t_open_res) -> value v_open_res;
+
+    // Open Session2
+        v_session_par.id:=omit;
+        v_session_par.local_address:="localhost";
+        v_session_par.local_port:=5060;
+        v_session_par.dest_address:="localhost";
+        v_session_par.dest_port:=5679;
+        v_open2.session_id:=v_session_par;
+
+        RTP2.send(v_open2);
+        RTP2.receive(t_open_res) -> value v_open_res2;
+
+    // Set message
+        v_session_par:=v_open_res.session_id;
+        v_session_par.local_address:=omit;
+        v_session_par.local_port:=omit;
+        v_session_par.dest_address:="localhost";
+        v_session_par.dest_port:=5060;
+
+        v_message.session_id:=v_session_par;
+        v_message.data:={
+            rtp:={ version:=2,
+                    padding_ind:= '0'B,
+                    extension_ind:='0'B,
+                    CSRC_count:=0,
+                    marker_bit:='0'B,
+                    payload_type:=11,
+                    sequence_number:=52134,
+                    time_stamp:='11110000101010101100110000001111'B,
+                    SSRC_id:='00001111010101010011001111110000'B,
+                    CSRCs:={'11110000101010101100110000001111'B},
+                    ext_header:=omit
+                 }
+            };
+
+/*****************************************************************************/
+    // make a pattern JPEG file with RTP payload header
+        var Media_RTP_Header mrh1 := {
+            jpeg_rtp_hdr := {{1,0,3,2,51,6},
+                             {1,'0'B,'1'B,2}, 
+                             {9,8,11,{250,134,255,99,1,23,99,45,32,2,8}}
+                            }};
+        make_pattern_file("sample.media", "jpeg_pattern.dat", mrh1, v_message);
+
+    // Send and receive JPEG media file
+        send_receive_file("jpeg_pattern.dat", "jpeg_rtp.dat",
+                          true, JPEG, v_message);
+        send_receive_file("jpeg_pattern.dat", "jpeg_rtp.org",
+                          false, JPEG, v_message);
+
+/*****************************************************************************/
+    // make a pattern H263 file with RTP payload header
+        var Media_RTP_Header mrh2 := {
+                             h263_rtp_hdr := {'0'B,'1'B,'011'B,'100'B,
+                                              '001'B,'0'B,'1'B,'1'B,'0'B,
+                                              '0110'B,'10'B,'101'B,
+                                              '01101011'B}
+                                     };
+        make_pattern_file("sample.media", "h263_pattern.dat", mrh2, v_message);
+    // Send and receive H263 media file
+        send_receive_file("h263_pattern.dat", "h263_rtp.dat",
+                          true, H263, v_message);
+        send_receive_file("h263_pattern.dat", "h263_rtp.org",
+                          false, H263, v_message);
+
+/*****************************************************************************/
+    // Send and receive MPEG4 media file
+        send_receive_file("sample.media", "mpeg4_rtp.dat",
+                          true, MPEG4, v_message);
+/*****************************************************************************/
+
+    // Close the session
+        v_close.session_id:=v_session_par;
+        RTP1.send(v_close);
+        RTP2.send(v_close);
+
+        TWAIT(1);
+
+        v_mapping_comp.stop;
+        disconnect(self:RTP1,v_mapping_comp:RTP_SP_PCO);
+        unmap(v_mapping_comp:UDP_PCO, system:UDP1);
+
+        v_mapping_comp2.stop;
+        disconnect(self:RTP2,v_mapping_comp2:RTP_SP_PCO);
+        unmap(v_mapping_comp:UDP_PCO, system:UDP2);
+    }
+
+    control{
+        execute(TC());
+    }
+}
+
