@@ -14,7 +14,7 @@
 //
 //  File:               RTP_EncDec.cc
 //  Description:        RTP
-//  Rev:                R4A
+//  Rev:                R5A
 //  Prodnr:             CNL 113 392
 //
 #include "RTP_Types.hh"
@@ -42,6 +42,7 @@ RTP__messages__union f__RTP__dec(OCTETSTRING const &data){
   bb.clear();
   bb.put_s(data_length,raw_data);
   if(pt>71 && pt<77){
+  // Magic numbers. See rfc3550 12. Summary of Protocol Constants 
     PDU__RTCP pdu;
     pdu.decode(PDU__RTCP_descr_,bb,TTCN_EncDec::CT_RAW);
     ret_val.rtcp()=pdu;

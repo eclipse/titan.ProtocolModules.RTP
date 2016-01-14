@@ -14,7 +14,7 @@
 //
 //  File:               RTP_Types.ttcn
 //  Description:        RTP
-//  Rev:                R4B
+//  Rev:                R5A
 //  Prodnr:             CNL 113 392
 //
 module RTP_Types{
@@ -25,6 +25,11 @@ external function f_RTP_enc ( in RTP_messages_union pdu ) return octetstring;
 external function f_RTP_dec ( in octetstring data ) return RTP_messages_union;
 external function f_RTP_packet_enc ( in RTP_packet pdu ) return octetstring;
 external function f_RTP_packet_dec ( in octetstring data ) return RTP_packet;
+external function f_RTCP_PDU_enc ( in PDU_RTCP pdu ) return octetstring
+with { extension "prototype(convert) encode(RAW)" };
+
+external function f_RTCP_PDU_dec ( in octetstring data ) return PDU_RTCP
+with { extension "prototype(convert) decode(RAW)" }
 
 type set of BIT32_BO_LAST RTP_CSRC_list;
 
@@ -243,18 +248,179 @@ type record RTCP_IE_APP{
   variant "FIELDORDER(msb)"
 };
 
+type record RTCP_IE_RTPFB {
+  INT2b                 version,
+  BIT1                  padding_ind,
+  INT5b                 fmt,
+  LIN1                  payload_type,
+  LIN2_BO_LAST          packet_length,
+  BIT32_BO_LAST         SSRC_packet_sender,
+  BIT32_BO_LAST         SSRC_media_sender,
+  RTCP_RTPFB_union      fci optional,
+  octetstring           padding optional
+} with {
+  variant (padding) "PRESENCE(padding_ind = '1'B)";
+  variant (packet_length) "LENGTHTO(SSRC_packet_sender,SSRC_media_sender,fci,padding)";
+  variant (packet_length) "UNIT(dword32)";
+  variant "FIELDORDER(msb)"
+  variant (fci) "CROSSTAG( 
+                    gen_naks, fmt=1;
+                    tmmbr, fmt=3;
+                    tmmbn, fmt=4;
+                    unknown_fci, OTHERWISE
+                 )";
+};
+
+type union RTCP_RTPFB_union {
+  RTCP_generic_NAKs    gen_naks,
+  RTCP_RTPFB_TMMBRs    tmmbr,
+  RTCP_RTPFB_TMMBNs    tmmbn,
+  octetstring          unknown_fci
+}
+
+type record of RTCP_RTPFB_TMMB RTCP_RTPFB_TMMBRs
+
+type record of RTCP_RTPFB_TMMB RTCP_RTPFB_TMMBNs
+
+  type integer INT14b_BO_LAST ( 0 .. 16383 ) with { variant "FIELDLENGTH(14), COMP(nosign), BYTEORDER(last)" };
+
+type record RTCP_RTPFB_TMMB {
+  BIT32_BO_LAST         SSRC,
+  INT6b                 exp,
+  integer               mantissa ( 0 .. 131072 ),
+  integer               measured_overhead( 0 .. 511 )
+} with {
+  variant "FIELDORDER(msb)"
+  variant (mantissa)  "FIELDLENGTH(17), COMP(nosign), BYTEORDER(last)"
+  variant (measured_overhead)  "FIELDLENGTH(9), COMP(nosign), BYTEORDER(last)"
+}
+
+type record of RTCP_generic_NAK RTCP_generic_NAKs
+
+type record RTCP_generic_NAK {
+  LIN2_BO_LAST         pid,
+  BIT16                blb
+}
+
+type record RTCP_IE_PSFB {
+  INT2b                 version,
+  BIT1                  padding_ind,
+  INT5b                 fmt,
+  LIN1                  payload_type,
+  LIN2_BO_LAST          packet_length,
+  BIT32_BO_LAST         SSRC_packet_sender,
+  BIT32_BO_LAST         SSRC_media_sender,
+  RTCP_PSFB_union       fci,
+  octetstring           padding optional
+} with {
+  variant (padding) "PRESENCE(padding_ind = '1'B)";
+  variant (packet_length) "LENGTHTO(SSRC_packet_sender,SSRC_media_sender,fci,padding)";
+  variant (packet_length) "UNIT(dword32)";
+  variant "FIELDORDER(msb)"
+  variant (fci) "CROSSTAG( 
+                    pli, fmt=1;
+                    sli, fmt=2;
+                    rpsi, fmt=3;
+                    fir, fmt=4;
+                    tstr, fmt=5;
+                    tstn, fmt=6;
+                    vbcm, fmt=7;
+                    afb, fmt=15;
+                    unknown_fci, OTHERWISE
+                 )";
+};
+
+type union RTCP_PSFB_union {
+
+  RTCP_PSFB_PLI        pli,
+  RTCP_PSFB_SLIs       sli,
+  RTCP_PSFB_RPSI       rpsi,
+  RTCP_PSFB_FIRs       fir,
+  RTCP_PSFB_TSTRs      tstr,
+  RTCP_PSFB_TSTNs      tstn,
+  RTCP_PSFB_VBCMs      vbcm,
+  
+  octetstring          afb,
+  
+  octetstring          unknown_fci
+}
+
+type record of RTCP_PSFB_FIR RTCP_PSFB_FIRs
+
+type record RTCP_PSFB_FIR{
+  BIT32_BO_LAST         SSRC,
+  INT1                  seq_no,
+  OCT3                  reserved
+}
+
+type record of RTCP_PSFB_TST RTCP_PSFB_TSTRs
+type record of RTCP_PSFB_TST RTCP_PSFB_TSTNs
+
+type record RTCP_PSFB_TST{
+  BIT32_BO_LAST         SSRC,
+  INT1                  seq_no,
+  OCT2                  reserved,
+  integer               index ( 0 .. 31)  // the encoding includes the 3 reserved
+                                           // bit encoded as zero
+  
+} with {
+  variant (seq_no) "FIELDLENGTH(8)"
+}
+
+type record of RTCP_PSFB_VBCM RTCP_PSFB_VBCMs
+
+type record RTCP_PSFB_VBCM {
+  BIT32_BO_LAST        SSRC,
+  INT1                 seq_no,
+  BIT1                 marker_bit,
+  INT7b                payload_type,
+  LIN2_BO_LAST         vbcm_length,
+  octetstring          vbcm
+} with {
+  variant "FIELDORDER(msb)"
+  variant "PADDING(dword32)"
+  variant (vbcm_length) "LENGTHTO(vbcm)"
+}
+
+
+type record RTCP_PSFB_PLI {
+  // empty
+}
+
+type record of RTCP_PSFB_SLI RTCP_PSFB_SLIs
+
+type record RTCP_PSFB_SLI{
+  INT13b_BO_LAST     first,
+  INT13b_BO_LAST     number,
+  INT6b              picture_id
+} with {
+  variant "FIELDORDER(msb)"
+}
+
+
+type record RTCP_PSFB_RPSI {
+  INT1          pb,  // must be filled correctly, not handled by the encoder
+  INT1          payload_type, // includes the first bit
+  octetstring   rpsi_string // includes the padding bits
+}
+
 type union RTCP_message{
   RTCP_IE_SR            sr,
   RTCP_IE_RR            rr,
   RTCP_IE_SDES          sdes,
   RTCP_IE_BYE           bye,
-  RTCP_IE_APP           app
+  RTCP_IE_APP           app,
+  RTCP_IE_RTPFB         rtpfb,
+  RTCP_IE_PSFB          psfb
 } with {
   variant "TAG(sr,    payload_type=200;
                  rr,    payload_type=201;
                  sdes,  payload_type=202;
                  bye,   payload_type=203;
-                 app,   payload_type=204)"
+                 app,   payload_type=204;
+                 rtpfb, payload_type=205;
+                 psfb,  payload_type=206
+                 )"
 };
 
 type record of RTCP_message PDU_RTCP with {variant ""};
