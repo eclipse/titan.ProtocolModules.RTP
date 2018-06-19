@@ -14,7 +14,7 @@
 //
 //  File:               RTP_File.cc
 //  Description:        Media files operation for RTP
-//  Rev:                R5A
+//  Rev:                R5B
 //  Prodnr:             CNL 113 392
 //
 

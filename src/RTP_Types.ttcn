@@ -14,7 +14,7 @@
 //
 //  File:               RTP_Types.ttcn
 //  Description:        RTP
-//  Rev:                R5A
+//  Rev:                R5B
 //  Prodnr:             CNL 113 392
 //
 module RTP_Types{
@@ -454,6 +454,8 @@ type record ASP_RTP_message{
   RTP_session_par      session_id,
   RTP_messages_union   data
 }
+
+type ASP_RTP_message ASP_RTP_messageDone with { extension "done" };
 
 type port RTPasp_PT message{
   inout ASP_RTP_message;

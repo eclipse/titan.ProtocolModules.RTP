@@ -14,7 +14,7 @@
 //
 //  File:           RTP_Media.ttcn
 //  Description:    Functions of the media file operations for RTP.
-//  Rev:            R5A
+//  Rev:            R5B
 //  Prodnr:         CNL 113 392
 
 module RTP_Media

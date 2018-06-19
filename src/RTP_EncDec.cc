@@ -14,7 +14,7 @@
 //
 //  File:               RTP_EncDec.cc
 //  Description:        RTP
-//  Rev:                R5A
+//  Rev:                R5B
 //  Prodnr:             CNL 113 392
 //
 #include "RTP_Types.hh"
